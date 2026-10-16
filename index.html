@@ -1,0 +1,1534 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NOC · Bandwidth Ledger</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css">
+<script src="js/maplibre-loader.js"></script>
+<script src="js/vendor/chart.min.js"></script>
+<script src="js/vendor/xlsx-writer.js"></script>
+<script src="js/vendor/jspdf.min.js"></script>
+<script src="js/vendor/jspdf-autotable.min.js"></script>
+<link rel="stylesheet" href="css/styles.css">
+
+<!-- MOBILE MANAGER FIREWALL FIX -->
+
+<!-- Chatbot visibility fix: works in both Dark and Light theme -->
+
+</head>
+<body>
+
+<div id="syncBanner" class="sync-banner" style="display:none;">
+  <span id="syncBannerText"></span>
+  <button type="button" id="syncBannerRetry" onclick="retrySyncCheck()">Retry connection</button>
+  <button type="button" id="syncBannerDismiss" onclick="dismissSyncBanner()" aria-label="Dismiss">✕</button>
+</div>
+
+<div class="login-overlay" id="loginOverlay" style="display:none">
+  <div class="login-orb o1"></div>
+  <div class="login-orb o2"></div>
+  <div class="login-card">
+    <div class="brand">
+      <span class="dot"></span>
+      <div>
+        <h1 style="font-family:var(--display); font-size:16.5px; font-weight:600;">Bandwidth Ledger</h1>
+        <span style="display:block; font-family:var(--mono); font-size:10.5px; color:var(--muted); margin-top:1px;">NOC · WI-FI USAGE LOG</span>
+      </div>
+    </div>
+    <h2 id="authHeading">Sign in</h2>
+
+    <div class="auth-panel active" id="panel-signin">
+      <p class="sub">Enter your login ID and password.</p>
+      <div class="field-row" style="margin-bottom:12px;">
+        <div><label for="loginUser">Login ID</label><input type="text" id="loginUser" autocomplete="username" placeholder="Enter your login ID"></div>
+      </div>
+      <div class="field-row" style="margin-bottom:0;">
+        <div><label for="loginPass">Password</label><input type="password" id="loginPass" autocomplete="current-password"></div>
+      </div>
+      <div class="login-error" id="loginError"></div>
+      <button class="btn" id="loginBtn" style="width:100%; justify-content:center; margin-top:14px;">Sign in</button>
+      <div class="login-hint notice" id="signinHint"></div>
+      <div class="login-hint">Accounts are created by an Administrator. If you don't have a login yet, ask your Administrator to add one for you from the <span class="mono">Admin</span> page.</div>
+      <div class="login-hint" style="margin-top:6px;">
+        <a href="#" id="resetAdminLink" style="color:var(--accent); text-decoration:none;">Forgot the Administrator password? Reset it</a>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="mobile-topbar" id="mobileTopbar" style="display:none;">
+  <div class="brand">
+    <span class="dot"></span>
+    <h1>Bandwidth Ledger</h1>
+  </div>
+  <div style="display:flex; align-items:center; gap:8px;">
+    <button class="theme-toggle" id="themeToggleMobile" type="button" aria-label="Toggle dark or light mode"></button>
+    <button class="burger" id="burgerBtn" aria-label="Open menu">☰</button>
+  </div>
+</div>
+
+<div class="app" id="appShell" style="display:none;">
+
+  <aside class="sidebar" id="sidebar">
+    <div class="brand-row">
+      <div class="brand">
+        <span class="dot"></span>
+        <div>
+          <h1>Bandwidth Ledger</h1>
+          <span>NOC · WI-FI USAGE LOG</span>
+        </div>
+      </div>
+      <button class="theme-toggle" id="themeToggleDesktop" type="button" aria-label="Toggle dark or light mode"></button>
+    </div>
+
+    <div class="branch-select-wrap">
+      <label for="branchSelect" class="branch-label">Branch</label>
+      <select id="branchSelect">
+        <option value="all">All Branches</option>
+        <option value="chennai">Chennai</option>
+        <option value="bangalore">Bangalore</option>
+        <option value="hosur">Hosur</option>
+      </select>
+    </div>
+
+    <div class="user-badge">
+      <div>
+        <div class="who" id="badgeName">—</div>
+        <span class="role" id="badgeRole">—</span>
+      </div>
+      <button class="logout-btn" id="logoutBtn">Sign out</button>
+    </div>
+
+    <button class="btn ghost small" id="changePassBtn" type="button" style="width:100%; justify-content:center; margin-top:-10px;">🔑 Change my password</button>
+    <button class="btn ghost small" id="clearCacheBtn" type="button" style="width:100%; justify-content:center; margin-top:6px;" title="Clears cached data on this computer and reloads">🧹 Clear cache &amp; refresh</button>
+
+    <div class="ticker" id="changePassPanel" style="display:none; padding:14px;">
+      <div class="label"><span>Change password</span></div>
+      <div class="field-row" style="margin:10px 0 0;">
+        <div><label for="cpCurrent">Current password</label><input type="password" id="cpCurrent" autocomplete="current-password"></div>
+      </div>
+      <div class="field-row" style="margin:10px 0 0;">
+        <div><label for="cpNew">New password</label><input type="password" id="cpNew" autocomplete="new-password"></div>
+      </div>
+      <div class="field-row" style="margin:10px 0 0;">
+        <div><label for="cpConfirm">Confirm new password</label><input type="password" id="cpConfirm" autocomplete="new-password"></div>
+      </div>
+      <div class="login-error" id="cpError" style="margin-top:2px;"></div>
+      <button class="btn small" id="cpSaveBtn" style="width:100%; justify-content:center; margin-top:10px;">Save new password</button>
+    </div>
+
+    <div class="ticker">
+      <div class="label"><span id="tickerLabel">Today's total</span><span id="tickerDate">--</span></div>
+      <div class="value" id="tickerValue">0 GB</div>
+      <div class="sub" id="tickerSub">No data logged yet</div>
+    </div>
+
+    <nav>
+      <button class="nav-btn active" data-view="home"><span class="ic">⬛</span> Home</button>
+      <button class="nav-btn" data-view="dashboard"><span class="ic">▤</span> Dashboard</button>
+      <button class="nav-btn" data-view="add"><span class="ic">＋</span> Add today's data</button>
+      <button class="nav-btn" data-view="search"><span class="ic">⌕</span> Search an IP</button>
+      <button class="nav-btn" data-view="devices"><span class="ic">▦</span> Device directory</button>
+      <button class="nav-btn" data-view="ipdirectory"><span class="ic">◉</span> Branch IP Directory</button>
+      <button class="nav-btn" data-view="hostdash"><span class="ic">◧</span> Host Usage Dashboard</button>
+      <button class="nav-btn" data-view="dailymanager"><span class="ic">📊</span> Application Usage</button>
+      <button class="nav-btn" data-view="firewall"><span class="ic">◉</span> Firewall Dashboard</button>
+      <button class="nav-btn" data-view="networkdiagram"><span class="ic">⌁</span> Network Diagram</button>
+       <button class="nav-btn" data-view="admin" data-admin-only="1"><span class="ic">🛡</span> Admin</button>
+    </nav>
+
+    <!-- MONTHLY REPORT: kept in the former Top Consumers position -->
+    <section class="monthly-report-card" aria-label="Monthly report">
+      <div class="monthly-report-title">MONTHLY REPORT</div>
+      <label class="monthly-report-label" for="reportMonth">Month</label>
+      <div class="monthly-month-wrap">
+        <input type="month" id="reportMonth" aria-label="Select report month">
+      </div>
+      <div class="monthly-report-actions">
+        <button class="monthly-excel-btn" id="downloadMonthlyExcelBtn" type="button" title="Download the selected month as an Excel workbook (.xlsx)">
+          <span class="excel-btn-icon" aria-hidden="true">⇩</span> Excel
+        </button>
+        <button class="monthly-pdf-btn" id="downloadMonthlyPdfBtn" type="button" title="Open the selected monthly report for PDF saving">
+          <span aria-hidden="true">⇩</span> PDF
+        </button>
+      </div>
+      <div class="monthly-report-sub" id="reportSub" aria-live="polite"></div>
+    </section>
+
+  </aside>
+
+  <main>
+
+    <!-- HOME / MODULES -->
+    <section class="view active" id="view-home">
+      <div class="topbar">
+        <div>
+          <h2>Welcome, <span id="homeUserName">—</span></h2>
+          <p>Pick a module below to get started.</p>
+        </div>
+        <span class="pill" id="branchPillHome">All Branches</span>
+      </div>
+
+      <h3 class="modules-heading">MODULES</h3>
+      <div class="module-grid" id="moduleGrid">
+        <button class="module-tile" data-view="dashboard" style="--tile-bg:#F59E0B;">
+          <span class="module-icon">▤</span>
+          <span class="module-label">Dashboard</span>
+        </button>
+        <button class="module-tile" data-view="add" style="--tile-bg:#10B981;">
+          <span class="module-icon">＋</span>
+          <span class="module-label">Add Today's Data</span>
+        </button>
+        <button class="module-tile" data-view="search" style="--tile-bg:#F97316;">
+          <span class="module-icon">⌕</span>
+          <span class="module-label">Search an IP</span>
+        </button>
+        <button class="module-tile" data-view="devices" style="--tile-bg:#8B5CF6;">
+          <span class="module-icon">▦</span>
+          <span class="module-label">Device Directory</span>
+        </button>
+        <button class="module-tile" data-view="hostdash" style="--tile-bg:#14B8A6;">
+          <span class="module-icon">◧</span>
+          <span class="module-label">Host Usage Dashboard</span>
+        </button>
+        <button class="module-tile" data-view="dailymanager" style="--tile-bg:#06B6D4;">
+          <span class="module-icon">📅</span>
+          <span class="module-label">Application Usage</span>
+        </button>
+        <button class="module-tile" data-view="firewall" style="--tile-bg:#0EA5E9;">
+          <span class="module-icon">◉</span>
+          <span class="module-label">Firewall Dashboard</span>
+        </button>
+        <button class="module-tile" data-view="networkdiagram" style="--tile-bg:#2563EB;">
+          <span class="module-icon">⌁</span>
+          <span class="module-label">Network Diagram</span>
+        </button>
+        <button class="module-tile" data-view="admin" data-admin-only="1" style="--tile-bg:#EF4444;">
+          <span class="module-icon">🛡</span>
+          <span class="module-label">Admin</span>
+        </button>
+        <button class="module-tile" data-action="report" style="--tile-bg:#0EA5E9;">
+          <span class="module-icon">📄</span>
+          <span class="module-label">Full Report</span>
+        </button>
+        <button class="module-tile" data-action="changepass" style="--tile-bg:#64748B;">
+          <span class="module-icon">🔑</span>
+          <span class="module-label">Change Password</span>
+        </button>
+        <button class="module-tile" data-action="logout" style="--tile-bg:#334155;">
+          <span class="module-icon">🚪</span>
+          <span class="module-label">Sign Out</span>
+        </button>
+      </div>
+    </section>
+
+    <!-- DASHBOARD -->
+    <section class="view" id="view-dashboard">
+      <div class="topbar">
+        <div>
+          <h2>Dashboard</h2>
+          <p>Every day you save adds to this dashboard — nothing gets overwritten.</p>
+        </div>
+        <span class="pill" id="branchPill">All Branches</span>
+      </div>
+
+      <div class="card flow-card">
+        <h3>How your data flows</h3>
+        <div class="hint">From connected devices to the reports you download — this is the path every usage number takes.</div>
+        <svg class="flow-svg" viewBox="0 0 920 190" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Data flow: devices to router to daily capture to dashboard and reports">
+          <defs>
+            <linearGradient id="flowLineGrad" x1="0" y1="0" x2="1" y2="0">
+              <stop offset="0%" stop-color="#3B82F6" stop-opacity="0.15"/>
+              <stop offset="50%" stop-color="#3B82F6" stop-opacity="0.55"/>
+              <stop offset="100%" stop-color="#3B82F6" stop-opacity="0.15"/>
+            </linearGradient>
+          </defs>
+
+          <!-- connector paths -->
+          <path id="flowPath1" d="M200,95 H260" stroke="url(#flowLineGrad)" stroke-width="2" fill="none"/>
+          <path id="flowPath2" d="M440,95 H500" stroke="url(#flowLineGrad)" stroke-width="2" fill="none"/>
+          <path id="flowPath3" d="M680,95 H740" stroke="url(#flowLineGrad)" stroke-width="2" fill="none"/>
+
+          <!-- traveling data dots -->
+          <circle r="4" fill="#3B82F6"><animateMotion dur="1.8s" repeatCount="indefinite" begin="0s"><mpath href="#flowPath1"/></animateMotion></circle>
+          <circle r="4" fill="#3B82F6"><animateMotion dur="1.8s" repeatCount="indefinite" begin="0.9s"><mpath href="#flowPath1"/></animateMotion></circle>
+          <circle r="4" fill="#3B82F6"><animateMotion dur="1.8s" repeatCount="indefinite" begin="0.35s"><mpath href="#flowPath2"/></animateMotion></circle>
+          <circle r="4" fill="#3B82F6"><animateMotion dur="1.8s" repeatCount="indefinite" begin="1.25s"><mpath href="#flowPath2"/></animateMotion></circle>
+          <circle r="4" fill="#3B82F6"><animateMotion dur="1.8s" repeatCount="indefinite" begin="0.7s"><mpath href="#flowPath3"/></animateMotion></circle>
+          <circle r="4" fill="#3B82F6"><animateMotion dur="1.8s" repeatCount="indefinite" begin="1.6s"><mpath href="#flowPath3"/></animateMotion></circle>
+
+          <!-- node 1: devices -->
+          <g class="flow-node" transform="translate(20,50)">
+            <rect width="180" height="90" rx="12"/>
+            <text x="90" y="34" text-anchor="middle" class="flow-ic">📶</text>
+            <text x="90" y="60" text-anchor="middle" class="flow-title">Connected Devices</text>
+            <text x="90" y="78" text-anchor="middle" class="flow-sub">Laptops, phones, tablets</text>
+          </g>
+
+          <!-- node 2: daily capture -->
+          <g class="flow-node" transform="translate(260,50)">
+            <rect width="180" height="90" rx="12"/>
+            <text x="90" y="34" text-anchor="middle" class="flow-ic">📝</text>
+            <text x="90" y="60" text-anchor="middle" class="flow-title">Daily Usage Log</text>
+            <text x="90" y="78" text-anchor="middle" class="flow-sub">Entered on "Add today's data"</text>
+          </g>
+
+          <!-- node 3: router -->
+          <g class="flow-node" transform="translate(500,50)">
+            <rect width="180" height="90" rx="12"/>
+            <text x="90" y="34" text-anchor="middle" class="flow-ic">📡</text>
+            <text x="90" y="60" text-anchor="middle" class="flow-title">Wi-Fi Router</text>
+            <text x="90" y="78" text-anchor="middle" class="flow-sub">Tracks bandwidth per host</text>
+          </g>
+
+          <!-- node 4: dashboard/reports -->
+          <g class="flow-node" transform="translate(740,50)">
+            <rect width="180" height="90" rx="12"/>
+            <text x="90" y="34" text-anchor="middle" class="flow-ic">📊</text>
+            <text x="90" y="60" text-anchor="middle" class="flow-title">Dashboard &amp; Reports</text>
+            <text x="90" y="78" text-anchor="middle" class="flow-sub">Totals, search, Excel export</text>
+          </g>
+        </svg>
+      </div>
+
+      <div class="card">
+        <h3>Overall usage — all days combined</h3>
+        <div class="hint">This grows automatically each time you save a new day. It stays saved even if you refresh or close this page.</div>
+        <div class="stat-row">
+          <div class="stat"><div class="n" id="ovTotal">0 GB</div><div class="l">Total logged, all-time</div></div>
+          <div class="stat"><div class="n" id="ovDays">0</div><div class="l">Days logged</div></div>
+          <div class="stat"><div class="n" id="ovTop">—</div><div class="l">Heaviest host overall</div></div>
+        </div>
+        <div class="table-scroll" style="margin-top:16px; max-height:280px;">
+          <table>
+            <thead><tr><th>Location</th><th>Host</th><th>IP address</th><th>Total usage</th><th>Days seen</th></tr></thead>
+            <tbody id="overallTableBody"></tbody>
+          </table>
+        </div>
+        <div style="margin-top:16px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
+          <button class="btn ghost" id="viewReportBtn" type="button">View full report →</button>
+          <div style="display:flex; align-items:center; gap:14px;">
+            <span class="hint" id="clearFeedback" style="margin:0;"></span>
+            <button class="btn danger small admin-action" id="clearAllBtn" type="button">Clear all saved data</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>Daily totals</h3>
+        <div class="hint">Every day you've logged, most recent first — tick the box to select a day, or click the row to jump straight to it below.</div>
+        <div class="select-bar" id="daySelectBar" style="display:none;">
+          <span class="count" id="daySelectCount">0 selected</span>
+          <div class="actions">
+            <button class="btn ghost small" id="downloadSelectedDaysBtn" type="button">⬇ Excel (selected)</button>
+            <button class="btn danger small admin-action" id="deleteSelectedDaysBtn" type="button">Delete selected</button>
+          </div>
+        </div>
+        <div class="table-scroll" style="max-height:260px;">
+          <table>
+            <thead><tr><th style="width:30px" class="admin-action-col"><input type="checkbox" id="selectAllDays" title="Select all days" class="admin-action"></th><th>Location</th><th>Date</th><th>Total that day</th><th>Hosts logged</th></tr></thead>
+            <tbody id="dailyTotalsBody"></tbody>
+          </table>
+        </div>
+        <div style="margin-top:14px; display:flex; justify-content:flex-end; align-items:center; gap:14px;">
+          <span class="hint" id="deleteTodayFeedback" style="margin:0;"></span>
+          <button class="btn danger small admin-action" id="deleteTodayBtn" type="button">Delete today's data</button>
+        </div>
+      </div>
+
+      <div class="topbar" style="margin-bottom:0;">
+        <div>
+          <h2 style="font-size:17px;">Day-by-day breakdown</h2>
+          <p>Pick a logged day to review host-by-host usage.</p>
+        </div>
+        <select id="dashDateSelect" style="width:auto; min-width:170px;"></select>
+      </div>
+
+      <div class="stat-row">
+        <div class="stat"><div class="n" id="statTotal">0 GB</div><div class="l">Total for day</div></div>
+        <div class="stat"><div class="n" id="statHosts">0</div><div class="l">Hosts logged</div></div>
+        <div class="stat"><div class="n" id="statTop">—</div><div class="l">Heaviest host</div></div>
+      </div>
+
+      <div class="card" id="perUserUsageCard">
+        <h3>User-wise usage chart</h3>
+        <div class="hint">Select any user/device to see their usage trend. The list automatically follows the current branch; administrators can see users from all branches.</div>
+        <div class="user-chart-controls">
+          <div><label for="userUsageSelect">Select user</label><select id="userUsageSelect"></select></div>
+        </div>
+        <div class="user-chart-wrap"><canvas id="perUserUsageChart"></canvas></div>
+        <div class="user-chart-empty" id="perUserUsageEmpty" style="display:none;">No usage data available for this user.</div>
+      </div>
+
+      <div class="card">
+        <h3>Usage by host</h3>
+        <div class="hint">Sorted highest to lowest for the selected day. Tick rows to bulk-delete, or click Edit to correct a mistake.</div>
+        <div class="select-bar" id="rowSelectBar" style="display:none;">
+          <span class="count" id="rowSelectCount">0 selected</span>
+          <div class="actions">
+            <button class="btn danger small admin-action" id="deleteSelectedRowsBtn" type="button">Delete selected</button>
+          </div>
+        </div>
+        <div class="table-scroll">
+          <table>
+            <thead>
+              <tr><th style="width:30px" class="admin-action-col"><input type="checkbox" id="selectAllRows" title="Select all" class="admin-action"></th><th>Location</th><th>Host</th><th>IP address</th><th>Usage</th><th style="width:24%">Share</th><th style="width:12%"></th></tr>
+            </thead>
+            <tbody id="dashTableBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- ADD DATA -->
+    <section class="view" id="view-add">
+      <div class="topbar">
+        <div>
+          <h2>Add today's data</h2>
+          <p>Log usage row by row, or paste your exported table straight in.</p>
+        </div>
+      </div>
+
+      <div class="grid-2">
+        <div class="card">
+          <h3>Row by row</h3>
+          <div class="hint">Pick the device, enter its usage, then save the whole day at once.</div>
+
+          <div class="field-row">
+            <div>
+              <label for="addDate">Date</label>
+              <input type="date" id="addDate">
+            </div>
+          </div>
+
+          <div id="rowsContainer"></div>
+          <button class="btn ghost small" id="addRowBtn" type="button">+ Add another host</button>
+
+          <div style="margin-top:18px; display:flex; gap:10px; align-items:center;">
+            <button class="btn" id="saveDayBtn">Save this day</button>
+            <button class="btn ghost" id="clearRowsBtn" type="button">Clear</button>
+            <span class="hint" id="addFeedback" style="margin:0;"></span>
+          </div>
+        </div>
+
+        <div class="card">
+          <h3>Paste a table instead</h3>
+          <div class="hint">Paste rows like <span class="mono">Host&nbsp;&nbsp;Bytes&nbsp;&nbsp;Percent</span> — one per line, tab or space separated. Percent is optional.</div>
+          <textarea id="pasteArea" placeholder="192.168.21.13	7.61 GB	10.55%&#10;192.168.100.89	6.57 GB	9.11%"></textarea>
+          <div style="margin-top:12px; display:flex; gap:10px; align-items:center;">
+            <button class="btn ghost" id="parsePasteBtn" type="button">Load into rows above</button>
+            <span class="hint" id="pasteFeedback" style="margin:0;"></span>
+          </div>
+        </div>
+      </div>
+
+      <div class="card" style="margin-top:18px;">
+        <h3>Bulk multi-day upload</h3>
+        <div class="hint">Upload a text/CSV export that covers many days at once — each day starts with a line containing its date, e.g. <span class="mono">Monday (13/10/2025)</span>, followed by <span class="mono">Host&nbsp;&nbsp;Bytes&nbsp;&nbsp;Percent</span> rows (tab or multi-space separated — Percent is optional). Every day found is added straight to usage records — no need to review row by row. This saves to whichever branch is selected at the top of the page.</div>
+        <div style="margin:12px 0 0;">
+          <input type="file" id="bulkFileInput" accept=".txt,.csv,.tsv">
+        </div>
+        <textarea id="bulkPasteArea" style="min-height:170px; margin-top:10px;" placeholder="Paste a multi-day export here, or choose a file above…"></textarea>
+        <div style="margin-top:12px; display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+          <button class="btn" id="bulkUploadBtn" type="button">Bulk upload</button>
+          <button class="btn ghost" id="bulkClearBtn" type="button">Clear</button>
+          <span class="hint" id="bulkFeedback" style="margin:0;"></span>
+        </div>
+      </div>
+    </section>
+
+    <!-- SEARCH -->
+    <section class="view" id="view-search">
+      <div class="topbar">
+        <div>
+          <h2>Search an IP</h2>
+          <p>Look up a host to see who it belongs to and its usage history.</p>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="search-box">
+          <input type="text" id="searchInput" placeholder="Type an IP address, hostname, or MAC — e.g. 192.168.21.13" list="ipList">
+          <datalist id="ipList"></datalist>
+          <button class="btn" id="searchBtn">Search</button>
+        </div>
+
+        <div id="searchResult"></div>
+      </div>
+    </section>
+
+    <!-- DEVICES -->
+    <section class="view" id="view-devices">
+      <div class="topbar">
+        <div>
+          <h2>Device directory</h2>
+          <p id="deviceCount">— devices on file</p>
+        </div>
+        <input class="device-filter-row" type="text" id="deviceFilter" placeholder="⌕  Filter by name, IP, MAC or username" style="width:300px;">
+      </div>
+
+      <div class="card">
+        <h3>Add a device</h3>
+        <div class="auto-grid" style="margin-bottom:4px;">
+          <div><label>Name</label><input type="text" id="newDevName" placeholder="e.g. FRONTDESK-LAP"></div>
+          <div><label>IP address</label><input type="text" id="newDevIp" placeholder="192.168.21.xxx"></div>
+          <div><label>MAC address</label><input type="text" id="newDevMac" placeholder="AA:BB:CC:DD:EE:FF"></div>
+          <div><label>Username (optional)</label><input type="text" id="newDevUsername" placeholder="e.g. SOCIALMEDIA3"></div>
+          <button class="btn admin-action" id="addDeviceBtn" type="button">Add</button>
+        </div>
+        <span class="hint" id="deviceFeedback"></span>
+      </div>
+
+      <div class="card">
+        <h3>Bulk add devices</h3>
+        <div class="hint">One device per line: <code>name, ip, mac, username</code> — mac and username are optional (<code>FRONTDESK-LAP, 192.168.21.90</code> also works). <b>Or just paste a plain IP per line</b> (e.g. <code>192.168.21.90</code>) and a name is auto-generated. Tab/space-separated exports also work — e.g. <code>192.168.30.44&nbsp;&nbsp;CPPLUS&nbsp;&nbsp;coordinator gf</code> — everything after the IP becomes the name. Paste a file's contents too.</div>
+        <div style="margin-top:8px;">
+          <input type="file" id="bulkDeviceFileInput" accept=".txt,.csv,.tsv">
+        </div>
+        <textarea id="bulkDeviceArea" style="min-height:150px; margin-top:10px;" placeholder="FRONTDESK-LAP, 192.168.21.90, AA:BB:CC:DD:EE:FF, RECEPTION&#10;BACKOFFICE-PC, 192.168.21.91&#10;192.168.21.92&#10;192.168.21.93"></textarea>
+        <div class="device-actions" style="margin-top:8px;">
+          <button class="btn admin-action" id="bulkAddDevicesBtn" type="button">Bulk add</button>
+          <button class="btn ghost" id="bulkDeviceClearBtn" type="button">Clear</button>
+          <span class="hint" id="bulkDeviceFeedback" style="margin:0;"></span>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="device-bulk-toolbar">
+          <div class="device-bulk-left">
+            <label class="device-select-all">
+              <input type="checkbox" id="deviceSelectAll" aria-label="Select all visible devices">
+              <span>Select all visible</span>
+            </label>
+            <span class="device-selection-count" id="deviceSelectionCount">0 selected</span>
+          </div>
+          <div class="device-bulk-right">
+            <button class="btn small ghost" id="deviceClearSelectionBtn" type="button">Clear selection</button>
+            <button class="btn small device-delete-selected" id="deviceDeleteSelectedBtn" type="button" disabled>🗑 Delete selected</button>
+          </div>
+        </div>
+        <div class="hint" style="margin:-3px 0 10px;">Select one, several, or all visible devices. Delete is available to Administrator only.</div>
+        <div class="table-scroll devices-table-wrap" style="max-height:520px;">
+          <table class="devices-table">
+            <thead><tr><th>NAME</th><th>IP ADDRESS</th><th>MAC ADDRESS</th></tr></thead>
+            <tbody id="devicesTableBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- DAILY USAGE MANAGER: Firebase-backed daily host + application records -->
+    <section class="view" id="view-dailymanager">
+      <div class="topbar">
+        <div>
+          <h2>Application Usage</h2>
+          <p>Upload daily application usage to Firebase. Data is saved day-by-day and linked to Host Name + IP + Date + Branch.</p>
+        </div>
+        <span class="pill" id="dmBranchPill">All Branches</span>
+      </div>
+
+      <div class="card">
+        <div class="daily-manager-tabs" role="tablist" aria-label="Application usage sections">
+          <button class="daily-manager-tab" id="dmTabHost" type="button" data-dm-tab="host" style="display:none">Host Usage</button>
+          <button class="daily-manager-tab active" id="dmTabApp" type="button" data-dm-tab="app">Application Usage</button>
+        </div>
+
+        <div class="dm-toolbar">
+          <div><label for="dmBranch">Branch</label>
+            <select id="dmBranch"><option value="all">All Branches</option><option value="chennai">Chennai</option><option value="bangalore">Bangalore</option><option value="hosur">Hosur</option></select>
+          </div>
+          <div><label for="dmFrom">From Date</label><input type="date" id="dmFrom"></div>
+          <div><label for="dmTo">To Date</label><input type="date" id="dmTo"></div>
+          <div><label for="dmSearch">Search Host / IP / Application</label><input type="text" id="dmSearch" placeholder="Host name, IP, app..."></div>
+          <div class="dm-actions">
+            <input type="file" id="dmCsvInput" accept=".csv,text/csv" style="display:none">
+            <button class="btn small" id="dmUploadBtn" type="button">⬆ Upload CSV</button>
+            
+            <button class="btn small ghost" id="dmAppExcelBtn" type="button">⬇ App Excel</button>
+            <button class="btn small ghost" id="dmTemplateBtn" type="button">⬇ CSV Template</button>
+            <button class="btn danger small admin-action" id="dmClearAppBtn" type="button">🗑 Clear All Saved Data</button>
+            
+          </div>
+        </div>
+        <div class="dm-note" id="dmStatus">Application Usage upload is separate from Host Usage. CSV columns: Date, Branch (optional), Host, Application, App_Usage_GB. Upload one day at a time. Existing dates remain saved. If the same Date + IP + Application is uploaded again, only that application record for that day is refreshed; other days are not removed.</div>
+      </div>
+
+      <div class="dm-kpis">
+        <div class="dm-kpi"><div class="n" id="dmAppTotal">0 GB</div><div class="l">Application Usage Total</div></div>
+        <div class="dm-kpi"><div class="n" id="dmSelectedDayTotal">0 GB</div><div class="l">Selected Day Application Usage</div></div>
+        <div class="dm-kpi"><div class="n" id="dmDayCount">0</div><div class="l">Days Saved</div></div>
+      </div>
+
+      <div class="card dm-chart-card">
+        <div class="dm-chart-head">
+          <div>
+            <h3 style="margin:0 0 4px;">Application Usage — Day Wise</h3>
+            <div class="hint">Uploaded CSV data is grouped by date. Select a date to see that day's application usage and host/IP details below.</div>
+          </div>
+          <div class="dm-chart-filter">
+            <label for="dmDateSelect">Select Date</label>
+            <select id="dmDateSelect"><option value="">All Dates</option></select>
+          </div>
+        </div>
+        <div class="dm-chart-wrap"><canvas id="dmDailyAppChart"></canvas></div>
+        <div class="dm-table-wrap dm-day-table-wrap">
+          <table class="dm-table" style="min-width:700px;">
+            <thead><tr><th>Date</th><th>Branch</th><th>Application Usage</th><th>Records</th><th>Top Application</th></tr></thead>
+            <tbody id="dmDailyBody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="card" id="dmHostPanel" style="margin-top:14px;display:none">
+        <div class="topbar" style="margin-bottom:10px;">
+          <div><h3>Host Usage — Host Name + IP + Daily Usage</h3><p>Host names come from the branch Device Directory. Edit a name below and save it to Firebase.</p></div>
+          <button class="btn small" id="dmSaveNamesBtn" type="button">Save Host Names</button>
+        </div>
+        <div class="dm-table-wrap"><table class="dm-table"><thead><tr><th>Date</th><th>Branch</th><th>Host Name</th><th>IP Address</th><th>Usage</th><th>Status</th></tr></thead><tbody id="dmHostBody"></tbody></table></div>
+      </div>
+
+      <div class="card" id="dmAppPanel" style="margin-top:14px;">
+        <div class="topbar" style="margin-bottom:10px;">
+          <div><h3>Application Usage</h3><p>Upload and view application usage by Date + Branch + Host Name + IP. Application records are stored separately in Firebase.</p></div>
+        </div>
+        <div class="dm-table-wrap"><table class="dm-table"><thead><tr><th>Date</th><th>Branch</th><th>Host Name</th><th>IP Address</th><th>Application</th><th>Usage</th></tr></thead><tbody id="dmAppBody"></tbody></table></div>
+      </div>
+    </section>
+
+    <!-- HOST USAGE DASHBOARD -->
+    <section class="view" id="view-hostdash">
+      <div class="topbar">
+        <div>
+          <h2>Host Usage Dashboard</h2>
+          <p>Filter by host or username, then drill into totals, year/month trends, and per-app usage.</p>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>Filters</h3>
+        <div class="auto-grid">
+          <div class="host-search-field">
+            <label for="hdHost">Search Host / IP / MAC / Username</label>
+            <div class="host-search-wrap">
+              <input type="text" id="hdHost" placeholder="e.g. 3.2 GB" autocomplete="off">
+            </div>
+          </div>
+          <div>
+            <label for="hdUsername">Select Username (optional)</label>
+            <select id="hdUsername"><option value="">All usernames</option></select>
+          </div>
+          <div>
+            <label for="hdBranch">Branch of selected host (auto)</label>
+            <select id="hdBranch" aria-label="Branch of selected host">
+              <option value="all">All Branches</option>
+              <option value="chennai">Chennai</option>
+              <option value="bangalore">Bangalore</option>
+              <option value="hosur">Hosur</option>
+              <option value="—">—</option>
+              <option value="Multiple branches">Multiple branches</option>
+              <option value="No matching branch">No matching branch</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>Usage Summary <span class="hint" style="margin:0; display:inline;">(all-time, matching filters above)</span></h3>
+        <div class="stat-row" style="grid-template-columns:repeat(4,1fr); margin-top:12px;">
+          <div class="stat"><div class="n" id="hdTotal">0 GB</div><div class="l">Total usage</div></div>
+          <div class="stat"><div class="n" id="hdDays">0</div><div class="l">Days reported</div></div>
+          <div class="stat"><div class="n" id="hdAvg">0 GB</div><div class="l">Average / day</div></div>
+          <div class="stat"><div class="n" id="hdHigh">0 GB</div><div class="l">Highest single day</div></div>
+          <div class="stat"><div class="n" id="hdLow">0 GB</div><div class="l">Lowest single day</div></div>
+          <div class="stat"><div class="n" id="hdFirst">—</div><div class="l">First reported date</div></div>
+          <div class="stat"><div class="n" id="hdLast">—</div><div class="l">Last reported date</div></div>
+        </div>
+      </div>
+
+      <div class="card daily-date-card">
+        <h3>Daily usage — select date</h3>
+        <div class="hint">Pick a date to instantly show the usage recorded for that day. From and To can also be used for a date range.</div>
+
+        <div class="daily-date-panel">
+          <div class="daily-date-field">
+            <label for="hdFromDate">FROM</label>
+            <input type="date" id="hdFromDate" aria-label="From date">
+          </div>
+          <div class="daily-date-field">
+            <label for="hdToDate">TO</label>
+            <input type="date" id="hdToDate" aria-label="To date">
+          </div>
+        </div>
+
+        <div class="daily-selected">
+          <div class="stat">
+            <div class="n" id="hdSelectedDayUsage">0 GB</div>
+            <div class="l" id="hdSelectedDayLabel">Selected day usage</div>
+          </div>
+          <div class="stat">
+            <div class="n" id="hdSelectedDayRecords">0</div>
+            <div class="l">Records</div>
+          </div>
+        </div>
+
+        <div class="daily-day-title">
+          <strong id="hdSelectedDateTitle">Select a date</strong>
+          <span class="date-badge" id="hdSelectedDateBadge">—</span>
+        </div>
+
+        <div class="daily-table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Host</th>
+                <th>IP Address</th>
+                <th>Username</th>
+                <th>Branch</th>
+                <th>Usage</th>
+              </tr>
+            </thead>
+            <tbody id="hdDailyRecordsBody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>Drill down by year / month</h3>
+        <div class="two-col" style="margin:12px 0 16px;">
+          <div><label for="hdYear">Select Year</label><select id="hdYear"></select></div>
+          <div>
+            <label for="hdMonth">Select Month</label>
+            <select id="hdMonth">
+              <option value="1">Jan</option><option value="2">Feb</option><option value="3">Mar</option>
+              <option value="4">Apr</option><option value="5">May</option><option value="6">Jun</option>
+              <option value="7">Jul</option><option value="8">Aug</option><option value="9">Sep</option>
+              <option value="10">Oct</option><option value="11">Nov</option><option value="12">Dec</option>
+            </select>
+          </div>
+        </div>
+        <div class="stat-row" style="grid-template-columns:1fr 1fr;">
+          <div class="stat"><div class="n" id="hdYearMonth">0 GB</div><div class="l">Usage for filters + year + month</div></div>
+          <div class="stat"><div class="n" id="hdYearOnly">0 GB</div><div class="l">Usage for filters + year</div></div>
+        </div>
+        <h3 style="margin-top:18px; font-size:14px;">Monthly usage breakdown</h3>
+        <div class="hint">Filters above + selected year.</div>
+        <div class="table-scroll" style="max-height:340px; margin-top:8px;">
+          <table>
+            <thead><tr><th>Month</th><th>Usage (GB)</th></tr></thead>
+            <tbody id="hdMonthlyBody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>Application Usage Breakdown <span class="hint" style="margin:0; display:inline;">(includes uploaded Application Usage CSV data)</span></h3>
+        <div class="stat-row" style="grid-template-columns:1fr 1fr; margin:12px 0 16px;">
+          <div class="stat"><div class="n" id="hdTopApp">—</div><div class="l">Most used application</div></div>
+          <div class="stat"><div class="n" id="hdTopAppGB">0 GB</div><div class="l">Usage of most used application</div></div>
+        </div>
+        <div style="height:280px; position:relative; margin-bottom:16px;">
+          <canvas id="hdAppPieChart"></canvas>
+        </div>
+        <div class="table-scroll" style="max-height:340px;">
+          <table>
+            <thead><tr><th>Date</th><th>Location</th><th>IP Address</th><th>Host Name</th><th>Application</th><th>Usage (GB)</th><th style="width:16%">Share</th><th style="width:100px">Status</th><th class="admin-action-col" style="width:12%"></th></tr>
+            </thead>
+            <tbody id="hdAppBody"></tbody>
+          </table>
+        </div>
+      </div>
+      <div class="card" id="appDrilldownCard">
+        <h3>Application → IP → Host Drill-down</h3>
+        <div class="hint">Select an application to see which firewall IPs/hosts consumed the data.</div>
+        <div class="hint" id="appDrillSourceNote" style="margin-top:6px;">
+          IP-wise values are shown only when the application record contains a real source IP.
+          A "sophos-firewall-aggregate" row means the imported Sophos report was branch-wide and did not contain per-IP data.
+        </div>
+        <div class="auto-grid" style="margin:12px 0 8px;">
+          <div>
+            <label for="appDrillSelect">Application</label>
+            <select id="appDrillSelect">
+              <option value="">Select application…</option>
+            </select>
+          </div>
+          <div class="stat">
+            <div class="n" id="appDrillTotal">0 GB</div>
+            <div class="l">Selected app usage</div>
+          </div>
+        </div>
+        <div class="table-scroll" style="max-height:420px; margin-top:8px;">
+          <table>
+            <thead>
+              <tr>
+                <th>Date</th><th>Location</th><th>IP Address</th><th>Host / User</th>
+                <th>Application</th><th>Usage</th><th>Share</th>
+              </tr>
+            </thead>
+            <tbody id="appDrillBody">
+              <tr><td colspan="7" class="hint">Select an application to view details.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="topbar" style="margin-top:6px;">
+        <div>
+          <h2 style="font-size:17px;">Branch Overview — <span id="hdBranchName">—</span></h2>
+          <p>Whole-branch totals, unaffected by the host/username filters above. Switch branch from the sidebar selector.</p>
+        </div>
+      </div>
+
+      <div class="grid-2">
+        
+<div class="card">
+          <h3>Branch Summary</h3>
+          <div class="stat-row" style="grid-template-columns:1fr 1fr; margin-top:10px;">
+            <div class="stat"><div class="n" id="brTotal">0 GB</div><div class="l">Total usage</div></div>
+            <div class="stat"><div class="n" id="brRecords">0</div><div class="l">Number of records</div></div>
+            <div class="stat"><div class="n" id="brAvg">0 GB</div><div class="l">Average usage</div></div>
+            <div class="stat"><div class="n" id="brHigh">0 GB</div><div class="l">Highest single usage</div></div>
+          </div>
+        </div>
+        <div class="card">
+          <h3>Top Applications <span class="hint" style="margin:0; display:inline;">(branch-wide)</span></h3>
+          <div class="table-scroll" style="max-height:230px; margin-top:10px;">
+            <table>
+              <thead><tr><th>Application</th><th>Usage (GB)</th></tr></thead>
+              <tbody id="brAppBody"></tbody>
+            </table>
+          </div>
+          <div class="hint" style="margin-top:8px;">Tagged per host/day from the "Top application" field on the Add Data page — separate from the granular per-app log above.</div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>Drill down by year / month <span class="hint" style="margin:0; display:inline;">(optional, branch-wide)</span></h3>
+        <div class="hint">Uses the same Year / Month picked above.</div>
+        <div class="stat-row" style="grid-template-columns:1fr 1fr; margin-top:10px;">
+          <div class="stat"><div class="n" id="brYear">0 GB</div><div class="l">Usage for branch + year</div></div>
+          <div class="stat"><div class="n" id="brYearMonth">0 GB</div><div class="l">Usage for branch + year + month</div></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>Host Coverage</h3>
+        <div class="auto-grid" style="margin:10px 0 4px;">
+          <div><label for="fixedHostsInput">Total fixed hosts</label><input type="number" min="0" step="1" id="fixedHostsInput" class="admin-action"></div>
+          <button class="btn small admin-action" id="saveFixedHostsBtn" type="button">Save</button>
+          <span class="hint" id="fixedHostsFeedback" style="margin:0;"></span>
+        </div>
+        <div class="stat-row" style="grid-template-columns:repeat(4,1fr); margin-top:10px;">
+          <div class="stat"><div class="n" id="covTotal">1500</div><div class="l">Total fixed hosts</div></div>
+          <div class="stat"><div class="n" id="covReported">0</div><div class="l">Hosts reported so far</div></div>
+          <div class="stat"><div class="n" id="covRemaining">0</div><div class="l">Hosts not yet reported</div></div>
+          <div class="stat"><div class="n" id="covPct">0%</div><div class="l">Coverage %</div></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>Full Records <span class="hint" style="margin:0; display:inline;">(filters above, selected scope)</span></h3>
+        <div class="hint">Every underlying usage row, with derived fields — export the whole thing from the Full Report page for Excel.</div>
+        <div class="table-scroll" style="max-height:400px; margin-top:10px;">
+          <table>
+            <thead><tr>
+              <th>Date</th><th>Branch</th><th>Host</th><th>IP Address</th><th>Username</th><th>Usage</th><th>Usage_GB</th>
+              <th>Usage %</th><th>Year</th><th>Month</th><th>Day</th><th>Top App</th><th>Top App (GB)</th><th>First Report</th>
+            </tr></thead>
+            <tbody id="hdFullRecordsBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- MERGED FIREWALL DASHBOARD -->
+    <section class="view" id="view-firewall">
+      <div class="fw-header">
+        <div>
+          <div class="fw-eyebrow">Live monitoring · Firewall traffic</div>
+          <div class="fw-title" id="fwPageTitle">Chennai Firewall Usage</div>
+          <div class="fw-sub" id="fwPageSub">Chennai branch — bandwidth, hosts and usage. This page stays on the selected branch after refresh.</div>
+        </div>
+        <div class="fw-actions">
+          <button class="fw-share-btn" id="fwManagerShareBtn" type="button" title="Create a self-contained HTML copy with the current branch data embedded">↗ Send to Manager (with data)</button>
+          <button class="fw-share-btn ghost" id="fwExportDataBtn" type="button" title="Export selected branch data, or all branch data when All Branches is selected">⬇ Export JSON Data</button>
+          <button class="fw-share-btn ghost" id="fwImportDataBtn" type="button" title="One-time upload: import branch or all-branches JSON data">⬆ One-Time JSON Upload</button>
+          <input id="fwImportDataInput" type="file" accept=".json,application/json" style="display:none;">
+          <div class="fw-clock">
+            <span class="fw-connection-pill" id="fwConnectionPill" title="Checks the dashboard's Firebase data connection">● Data link: checking…</span>
+            Last refreshed<br><span id="fwClock">--:--:--</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="fw-branch-switcher" id="fwBranchSwitcher" aria-label="Firewall branch selector"></div>
+
+      <div class="fw-kpis">
+        <div class="fw-kpi"><div class="fw-bar"></div><div class="fw-kpi-label">Active hosts</div><div class="fw-kpi-value" id="fwHosts">0</div><div class="fw-kpi-foot" id="fwHostsFoot">—</div></div>
+        <div class="fw-kpi"><div class="fw-bar"></div><div class="fw-kpi-label">Total users</div><div class="fw-kpi-value" id="fwUsers">0</div><div class="fw-kpi-foot">active on network</div></div>
+        <div class="fw-kpi blue"><div class="fw-bar"></div><div class="fw-kpi-label">Total usage</div><div class="fw-kpi-value"><span id="fwUsage">0</span><span class="fw-kpi-unit" id="fwUsageUnit">GB</span></div><div class="fw-kpi-foot">firewall master data</div></div>
+        <div class="fw-kpi amber"><div class="fw-bar"></div><div class="fw-kpi-label">Peak single usage</div><div class="fw-kpi-value"><span id="fwPeak">0</span><span class="fw-kpi-unit" id="fwPeakUnit">GB</span></div><div class="fw-kpi-foot" id="fwPeakHost">—</div></div>
+        <div class="fw-kpi"><div class="fw-bar"></div><div class="fw-kpi-label">Avg usage / record</div><div class="fw-kpi-value"><span id="fwAvg">0</span><span class="fw-kpi-unit" id="fwAvgUnit">GB</span></div><div class="fw-kpi-foot" id="fwRecordFoot">—</div></div>
+      </div>
+
+      <div class="fw-grid">
+        <div class="fw-panel">
+          <div class="fw-panel-title">Branch locations <span class="fw-tag">3 sites</span></div>
+          <div id="fwMap" class="fw-map"></div>
+          <div class="fw-legend" id="fwLegend"></div>
+        </div>
+        <div class="fw-panel">
+          <div class="fw-panel-title">Usage by branch <span class="fw-tag">GB · full period</span></div>
+          <div class="fw-chart"><canvas id="fwBranchBar"></canvas></div>
+          <div class="fw-note">Click a branch row below or use the main branch selector to change the active branch.</div>
+        </div>
+      </div>
+
+      <div class="fw-grid">
+        <div class="fw-panel">
+          <div class="fw-panel-title" id="fwTrendTitle">14-day usage by branch <span class="fw-tag" id="fwTrendTag">Auto unit · total</span></div>
+          <div class="fw-chart"><canvas id="fwTrendLine"></canvas></div>
+        </div>
+        <div class="fw-panel">
+          <div class="fw-panel-title">Host coverage <span class="fw-tag">active vs registered</span></div>
+          <div class="fw-chart"><canvas id="fwCoverageBar"></canvas></div>
+        </div>
+      </div>
+
+      <div class="fw-panel">
+        <div class="fw-panel-title" id="fwBranchSummaryTitle">Branch summary <span class="fw-tag">click to select</span></div>
+        <div class="fw-table-scroll">
+          <table class="fw-branch-table">
+            <thead><tr><th>Branch</th><th>Active hosts</th><th>Registered</th><th>Users</th><th>Usage</th><th>Peak</th><th>Avg</th></tr></thead>
+            <tbody id="fwBranchTable"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="fw-panel">
+        <div class="fw-panel-title">Selected branch overview <span class="fw-tag" id="fwSelectedTag">Chennai</span></div>
+        <div class="fw-coverage">
+          <div class="fw-mini"><b id="fwSelUsage">0 GB</b><span>Total usage</span></div>
+          <div class="fw-mini"><b id="fwSelRecords">0</b><span>Records</span></div>
+          <div class="fw-mini"><b id="fwSelHosts">0</b><span>Active hosts</span></div>
+        </div>
+      </div>
+
+      <div class="fw-panel">
+        <div class="fw-panel-title">Top usage records <span class="fw-tag">selected branch</span></div>
+        <div class="fw-table-scroll">
+          <table class="fw-branch-table">
+            <thead><tr><th>Host</th><th>IP Address</th><th>Username</th><th>Branch</th><th>Date</th><th>Usage</th><th>Status</th></tr></thead>
+            <tbody id="fwHostTable"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    
+<section class="view" id="view-networkdiagram">
+  <div class="page-head">
+    <div>
+      <div class="eyebrow">NETWORK / INFRASTRUCTURE</div>
+      <h2>Network Diagram</h2>
+      <p class="sub">Editable version of Excel Sheet 2 — move devices, add nodes, create links, and save the layout.</p>
+    </div>
+  </div>
+
+  <div class="network-diagram-toolbar">
+    <div class="network-diagram-tabs">
+      <button class="btn small active" id="networkEditTab" type="button">✎ Editable Diagram</button>
+      <button class="btn small ghost" id="networkRefTab" type="button">▧ Excel Sheet 2 Reference</button>
+    </div>
+    <button class="btn small" id="networkAddNodeBtn" type="button">＋ Add Node</button>
+    <button class="btn small" id="networkAddLinkBtn" type="button">↗ Draw Line</button>
+    <button class="btn small danger" id="networkClearLinksBtn" type="button" title="Delete all existing lines (devices stay)">🗑 Clear All Lines</button>
+    <div class="network-line-palette" id="networkLinePalette" title="Choose line colour">
+      <button class="network-color-btn active" data-color="#FFD400" type="button"><span class="swatch yellow"></span>Fiber (Yellow)</button>
+      <button class="network-color-btn" data-color="#111827" type="button"><span class="swatch black"></span>CAT6 (Black)</button><button class="network-color-btn" data-color="#EF4444" title="Red" type="button"><span style="display:inline-block;width:16px;height:16px;border-radius:50%;background:#EF4444;box-shadow:0 0 8px #EF4444"></span></button><button class="network-color-btn" data-color="#F97316" title="Orange" type="button"><span style="display:inline-block;width:16px;height:16px;border-radius:50%;background:#F97316;box-shadow:0 0 8px #F97316"></span></button><button class="network-color-btn" data-color="#22C55E" title="Green" type="button"><span style="display:inline-block;width:16px;height:16px;border-radius:50%;background:#22C55E;box-shadow:0 0 8px #22C55E"></span></button><button class="network-color-btn" data-color="#3B82F6" title="Blue" type="button"><span style="display:inline-block;width:16px;height:16px;border-radius:50%;background:#3B82F6;box-shadow:0 0 8px #3B82F6"></span></button><button class="network-color-btn" data-color="#06B6D4" title="Cyan" type="button"><span style="display:inline-block;width:16px;height:16px;border-radius:50%;background:#06B6D4;box-shadow:0 0 8px #06B6D4"></span></button><button class="network-color-btn" data-color="#A855F7" title="Purple" type="button"><span style="display:inline-block;width:16px;height:16px;border-radius:50%;background:#A855F7;box-shadow:0 0 8px #A855F7"></span></button><button class="network-color-btn" data-color="#EC4899" title="Pink" type="button"><span style="display:inline-block;width:16px;height:16px;border-radius:50%;background:#EC4899;box-shadow:0 0 8px #EC4899"></span></button><button class="network-color-btn" data-color="#F8FAFC" title="White" type="button"><span style="display:inline-block;width:16px;height:16px;border-radius:50%;background:#F8FAFC;box-shadow:0 0 8px #F8FAFC"></span></button><button class="network-color-btn" id="ndCustomBtn" data-color="#FF00FF" title="Pick any colour" type="button"><input type="color" id="ndCustomColor" value="#ff00ff" style="width:24px;height:20px;padding:0;border:0;background:none;vertical-align:middle;cursor:pointer"></button>
+    </div>
+    <button class="btn small" id="networkImportBtn" type="button" title="Upload an Excel sheet and build the diagram from it">📥 Import Excel</button>
+    <button class="btn small ghost" id="networkTemplateBtn" type="button" title="Download a sample Excel format">📄 Template</button>
+    <input type="file" id="networkImportFile" accept=".xlsx,.csv" style="display:none">
+    <button class="btn small ghost" id="networkSaveBtn" type="button">💾 Save</button>
+    <button class="btn small ghost" id="networkResetBtn" type="button">↺ Reset</button>
+    <button class="btn small ghost" id="networkExportBtn" type="button">⇩ Export JSON</button>
+    <div class="network-view-switch"><button class="btn small active" type="button" onclick="this.classList.add('active');this.nextElementSibling.classList.remove('active');document.getElementById('networkCanvas').style.transform='perspective(1500px) rotateX(0deg)';">3D View</button><button class="btn small ghost" type="button" onclick="this.classList.add('active');this.previousElementSibling.classList.remove('active');document.getElementById('networkCanvas').style.transform='none';">2D View</button></div><span class="network-diagram-status" id="networkDiagramStatus">Excel Sheet 2 loaded</span>
+  </div>
+
+  <div class="network-diagram-layout" id="networkEditLayout">
+    <div class="network-diagram-card">
+      <div class="network-diagram-head">
+        <strong>Editable Network Topology</strong>
+        <span class="mono" style="font-size:10px;color:var(--muted)">Drag nodes • click a node/link to edit</span>
+      </div>
+      <div class="network-diagram-workspace" id="networkWorkspace">
+        <div class="network-3d-badge">3D TOPOLOGY</div>
+        <div class="network-3d-legend"><div><i class="fiber-dot"></i> Fiber Cable (Yellow)</div><div><i class="path-dot"></i> CAT6 Cable (Black)</div></div><div class="network-compass"><span>S</span></div>
+        <div class="network-selection-float" id="networkSelectionFloat" aria-hidden="true">
+          <button id="networkFloatDelete" type="button">🗑 Delete</button>
+          <button id="networkFloatYellow" type="button"><span class="float-swatch yellow"></span>Fiber</button>
+          <button id="networkFloatBlack" type="button"><span class="float-swatch black"></span>CAT6</button><input type="color" id="networkFloatColor" value="#ef4444" title="Any colour for selected line" style="width:34px;height:30px;padding:0;border:0;background:none;cursor:pointer">
+        </div>
+        <div class="network-canvas" id="networkCanvas">
+          <svg class="network-links" id="networkLinksSvg" viewBox="0 0 1450 900" preserveAspectRatio="none"></svg>
+          <div id="networkNodesLayer"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="network-diagram-card network-side">
+      <h3>Selected Object</h3>
+      <div id="networkSelectedEmpty" class="network-selected-empty">Select a device or link.</div>
+
+      <div id="networkNodeEditor" style="display:none">
+        <div class="field"><label>Device / Room Name</label><input id="networkNodeLabel" type="text"></div>
+        <div class="field"><label>Icon / Image</label><select id="networkNodeImage"></select></div>
+        <div style="display:flex;align-items:center;gap:10px;margin:-2px 0 8px">
+          <img id="networkImgPreview" alt="" style="width:64px;height:48px;object-fit:contain;border:1px solid rgba(96,165,250,.25);border-radius:8px;background:rgba(2,6,23,.6);padding:3px">
+          <label style="font-size:11px;display:flex;align-items:center;gap:5px;cursor:pointer"><input type="checkbox" id="networkImgRemoveBg" checked> Auto-remove white background</label>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:8px">
+          <button class="btn small ghost" id="networkImgAddBtn" type="button" title="Upload a new image and use it for this device">⬆ Add New</button>
+          <button class="btn small ghost" id="networkImgReplaceBtn" type="button" title="Replace this device's image with an uploaded one">🔁 Replace</button>
+          <button class="btn small ghost" id="networkImgRenameBtn" type="button" title="Rename the image chosen in the dropdown">✎ Rename</button>
+          <button class="btn small ghost" id="networkImgRemoveBtn" type="button" title="Remove the image chosen in the dropdown from the list">🗑 Remove</button>
+          <button class="btn small ghost" id="networkImgRestore" type="button" style="grid-column:1/-1;display:none">↺ Restore removed images</button>
+        </div>
+        <input type="file" id="networkImgFile" accept="image/*" style="display:none">
+        <div class="mini-row">
+          <div class="field"><label>X</label><input id="networkNodeX" type="number"></div>
+          <div class="field"><label>Y</label><input id="networkNodeY" type="number"></div>
+        </div>
+        <div class="mini-row">
+          <div class="field"><label>Width</label><input id="networkNodeW" type="number"></div>
+          <div class="field"><label>Height</label><input id="networkNodeH" type="number"></div>
+        </div>
+        <button class="btn small" id="networkApplyNodeBtn" type="button">Apply Changes</button>
+        <button class="btn small danger" id="networkDeleteNodeBtn" type="button" style="margin-top:6px">Delete Node</button>
+      </div>
+
+      <div id="networkLinkEditor" style="display:none">
+        <div class="field"><label>From</label><select id="networkLinkSource"></select></div>
+        <div class="field"><label>To</label><select id="networkLinkTarget"></select></div>
+        <div class="field"><label>Line Colour</label><input id="networkLinkColor" type="color" value="#64748b"></div>
+        <div class="field nd-size-field">
+          <label id="networkLinkSizeLabel">Cable Size</label>
+          <div class="nd-size-row"><input id="networkLinkSizeRange" type="range" min="0.1" max="3" step="0.1"><span class="nd-size-num"><input id="networkLinkSizeNum" type="number" min="0.1" max="10" step="0.1" inputmode="decimal"><i>x</i></span></div>
+          <button class="btn small ghost" id="networkLinkSizeAll" type="button" style="margin-top:6px;width:100%">Apply to all cables of this type</button>
+        </div>
+        <div id="networkLinkAttachBox" style="display:none;margin:2px 0 8px">
+          <div id="networkLinkAttachInfo" style="font-size:11px;color:#9fb3cf;margin-bottom:6px;line-height:1.4"></div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
+            <button class="btn small ghost" id="networkAttachBtn" type="button" title="Link the line ends to the nearest devices so they move together">🔗 Attach to devices</button>
+            <button class="btn small ghost" id="networkDetachBtn" type="button" title="Make the line free-floating again">✂ Detach</button>
+          </div>
+        </div>
+        <button class="btn small" id="networkApplyLinkBtn" type="button">Apply Link</button>
+        <button class="btn small danger" id="networkDeleteLinkBtn" type="button" style="margin-top:6px">Delete Link</button>
+      </div>
+
+      <hr>
+      <h3>Quick Add</h3>
+      <button class="btn small ghost" id="networkAddSwitchBtn" type="button">＋ Switch / Rack</button>
+      <button class="btn small ghost" id="networkAddAPBtn" type="button" style="margin-top:6px">＋ Access Point</button>
+      <button class="btn small ghost" id="networkAddServerBtn" type="button" style="margin-top:6px">＋ Server Rack</button>
+      <button class="btn small ghost" id="networkAddRoomBtn" type="button" style="margin-top:6px">＋ Room / Location</button>
+      <button class="btn small ghost" id="networkAddTPLinkBtn" type="button" style="margin-top:6px">＋ TP-Link Router</button>
+      <button class="btn small ghost" id="networkAttachAllBtn" type="button" style="margin-top:6px" title="Attach every drawn line end that is next to a device — line positions do not change">🔗 Attach all lines to devices</button>
+      <div class="hint">Changes are saved in this browser. Use <b>Save</b> after editing. The original Excel Sheet 2 is kept as a reference tab and is not modified.</div>
+    </div>
+  </div>
+
+  <div class="network-diagram-card network-reference" id="networkReferencePanel">
+    <div class="network-diagram-head"><strong>Excel Sheet 2 — Original Reference</strong><span class="mono" style="font-size:10px;color:var(--muted)">Source: uploaded workbook</span></div>
+    <div class="ref-note">This is the original Sheet 2 layout. Use it to compare while editing the live diagram.</div>
+    <img id="networkReferenceImage" alt="Excel Sheet 2 network diagram reference">
+  </div>
+
+  <div class="network-add-modal" id="networkAddModal" aria-hidden="true">
+    <div class="network-add-card" role="dialog" aria-modal="true" aria-labelledby="networkAddTitle">
+      <h3 id="networkAddTitle">Add Network Node</h3>
+      <p>New nodes use the same 3D style and can be dragged anywhere on the topology.</p>
+      <div class="network-add-grid">
+        <div><label for="networkNewLabel">Device / Room Name</label><input id="networkNewLabel" type="text" placeholder="e.g. Main Switch" autocomplete="off"></div>
+        <div><label for="networkNewType">Node Type</label><select id="networkNewType"><option value="switch">Switch / Rack</option><option value="ap">Access Point</option><option value="server">Server</option><option value="router">Router / Firewall</option><option value="tplink">TP-Link Router (WiFi)</option><option value="room">Room / Location</option><option value="fiber">Fiber / ISP</option></select></div>
+      </div>
+      <div class="network-add-actions"><button class="btn small ghost" id="networkAddCancelBtn" type="button">Cancel</button><button class="btn small primary" id="networkAddCreateBtn" type="button">＋ Add Node</button></div>
+    </div>
+  </div>
+
+</section>
+
+<section class="view" id="view-admin">
+      <div class="topbar">
+        <div>
+          <h2>Admin</h2>
+          <p>Manage who can sign in, and monitor every login and action.</p>
+        </div>
+      </div>
+
+      <div class="auth-tabs" id="adminSubTabs" style="max-width:360px;">
+        <button type="button" class="auth-tab active" data-admintab="users">Manage users</button>
+        <button type="button" class="auth-tab" data-admintab="activity">Activity log</button>
+      </div>
+
+      <!-- MANAGE USERS -->
+      <div class="auth-panel active" id="adminpanel-users">
+        <div class="card">
+          <h3>Add a user</h3>
+          <div class="hint">Give them a login ID and a starting password — they can change their password after signing in.</div>
+          <div class="three-col" style="margin-bottom:4px;">
+            <div><label>Login ID</label><input type="text" id="newUserId" placeholder="e.g. ganesh"></div>
+            <div><label>Display name</label><input type="text" id="newUserLabel" placeholder="e.g. Ganesh"></div>
+            <div>
+              <label>Role</label>
+              <select id="newUserRole">
+                <option value="user">User (branch access only)</option>
+                <option value="administrator">Administrator (full access)</option>
+              </select>
+            </div>
+            <div>
+              <label>Branch</label>
+              <select id="newUserBranch">
+                <option value="chennai">Chennai</option>
+                <option value="bangalore">Bangalore</option>
+                <option value="hosur">Hosur</option>
+              </select>
+            </div>
+          </div>
+          <div class="two-col" style="margin-top:10px;">
+            <div><label>Starting password</label><input type="password" id="newUserPass" autocomplete="new-password"></div>
+            <div><label>Confirm password</label><input type="password" id="newUserPass2" autocomplete="new-password"></div>
+          </div>
+          <div style="margin-top:12px; display:flex; align-items:center; gap:12px;">
+            <button class="btn" id="addUserBtn" type="button">+ Add user</button>
+            <span class="hint" id="addUserFeedback" style="margin:0;"></span>
+          </div>
+        </div>
+
+        <div class="card" id="resetPassCard" style="display:none;">
+          <h3>Reset password for <span id="resetPassTarget" class="mono"></span></h3>
+          <div class="two-col">
+            <div><label>New password</label><input type="password" id="resetPassNew" autocomplete="new-password"></div>
+            <div><label>Confirm password</label><input type="password" id="resetPassConfirm" autocomplete="new-password"></div>
+          </div>
+          <div style="margin-top:12px; display:flex; align-items:center; gap:12px;">
+            <button class="btn small" id="resetPassSaveBtn" type="button">Save new password</button>
+            <button class="btn ghost small" id="resetPassCancelBtn" type="button">Cancel</button>
+            <span class="hint" id="resetPassFeedback" style="margin:0;"></span>
+          </div>
+        </div>
+
+        <div class="card">
+          <h3>All accounts</h3>
+          <div class="table-scroll" style="max-height:420px;">
+            <table>
+              <thead><tr><th>Login ID</th><th>Name</th><th style="width:22%">Role</th><th>Last login</th><th style="width:22%"></th></tr></thead>
+              <tbody id="usersTableBody"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- ACTIVITY LOG -->
+      <div class="auth-panel" id="adminpanel-activity">
+        <div class="card">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:16px;flex-wrap:wrap;margin-bottom:14px;">
+            <div>
+              <h3 style="margin-bottom:6px;">Full activity log</h3>
+              <div class="hint">Every login, upload, Excel download, report view, and data change — newest first.</div>
+            </div>
+            <button class="btn small" id="downloadActivityExcelBtn" type="button" title="Download the complete activity log as Excel">⬇ Download Excel</button>
+          </div>
+          <div class="table-scroll" style="max-height:560px;">
+            <table>
+              <thead><tr><th style="width:20%">When</th><th style="width:16%">User</th><th style="width:20%">Action</th><th>Details</th></tr></thead>
+              <tbody id="historyTableBody"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- OVERALL REPORT (full page) -->
+    <section class="view" id="view-report">
+      <div class="topbar">
+        <div>
+          <h2>Overall usage report</h2>
+          <p id="reportGeneratedAt">Every day, every host, added together.</p>
+        </div>
+        <div style="display:flex; gap:10px;">
+          <button class="btn ghost" id="printReportBtn" type="button">⬇ Download / Save PDF</button>
+          <button class="btn ghost" id="fullReportExcelBtn" type="button">⬇ Download Excel</button>
+          <button class="btn ghost" id="backToDashBtn" type="button">← Back to Dashboard</button>
+        </div>
+      </div>
+
+      <div class="stat-row">
+        <div class="stat"><div class="n" id="repTotal">0 GB</div><div class="l">Total logged, all-time</div></div>
+        <div class="stat"><div class="n" id="repDays">0</div><div class="l">Days logged</div></div>
+        <div class="stat"><div class="n" id="repHosts">0</div><div class="l">Hosts with usage</div></div>
+        <div class="stat"><div class="n" id="repTop">—</div><div class="l">Heaviest host overall</div></div>
+      </div>
+
+      <div class="card" id="fullReportCenter" style="margin-bottom:18px;">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:14px;flex-wrap:wrap;">
+          <div>
+            <h3 style="margin-bottom:5px;">Full Report &amp; Backup Center</h3>
+            <div class="hint">One place for Chennai, Bangalore and Hosur. The report refreshes automatically; Excel/PDF can be generated here, and manual email is handled through your normal Gmail compose window.</div>
+          </div>
+          <span class="pill" id="frcOverallStatus">Ready</span>
+        </div>
+
+        <div class="grid" style="margin-top:16px;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));">
+          <div class="stat"><div class="n" id="frcBranches">3</div><div class="l">Branches in report</div></div>
+          <div class="stat"><div class="n" id="frcRecords">0</div><div class="l">Firebase usage records</div></div>
+          <div class="stat"><div class="n" id="frcTotal">0 GB</div><div class="l">Total usage</div></div>
+          <div class="stat"><div class="n" id="frcLastBackup">—</div><div class="l">Last backup</div></div>
+        </div>
+
+        <div style="margin-top:18px;">
+          <h4 style="margin-bottom:10px;">Report process</h4>
+          <div id="frcProcess" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px;">
+            <div class="card frc-step"><b>1. Firebase</b><span>Read shared branch data</span></div>
+            <div class="card frc-step"><b>2. Validate</b><span>Check Chennai / Bangalore / Hosur data</span></div>
+            <div class="card frc-step"><b>3. Summarize</b><span>Usage, devices, hosts and dates</span></div>
+            <div class="card frc-step"><b>4. Generate</b><span>Create full report and backup JSON</span></div>
+            <div class="card frc-step"><b>5. Deliver</b><span>Excel/PDF download and manual Gmail email</span></div>
+          </div>
+        </div>
+
+        <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:16px;">
+          <button class="btn" id="frcGenerateBtn" type="button">↻ Generate Full Report</button>
+          <button class="btn ghost" id="frcBackupBtn" type="button">⇩ Firebase Backup JSON</button>
+          <button class="btn ghost" id="frcPrintBtn" type="button">🖨 Print / Save PDF</button>
+           <button class="btn ghost" id="frcExcelBtn" type="button">⇩ Download Excel</button>
+          <button class="btn ghost" id="frcSendBtn" type="button">✉ Send Automation Now</button>
+        </div>
+
+        <div class="card" style="margin-top:16px;background:rgba(255,255,255,.025);">
+          <div style="display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;align-items:center;">
+            <div><b>Manual Email</b><div class="hint" style="margin-top:4px;">Generate the report files, then open Gmail with the recipient and message already filled.</div></div>
+            <span class="pill">Manual mode</span>
+          </div>
+          <div class="frc-mail-grid" style="margin-top:14px;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;">
+            <div>
+              <label class="hint" for="frcManualEmail">Email address</label>
+              <input id="frcManualEmail" type="email" value="" placeholder="example@gmail.com" autocomplete="email">
+            </div>
+            <div>
+              <label class="hint" for="frcManualMonth">Report month</label>
+              <input id="frcManualMonth" type="month">
+            </div>
+          </div>
+          <div class="frc-mail-actions" style="display:flex;gap:10px;flex-wrap:wrap;margin-top:12px;">
+            <button class="btn" id="frcShareBtn" type="button">✉ Share Excel to Gmail (auto-attach)</button>
+            <button class="btn ghost" id="frcManualSendBtn" type="button">✉ Open Gmail (no attachment)</button>
+            <button class="btn ghost" id="frcExcelBtn" type="button">⇩ Download Excel</button>
+            <button class="btn ghost" id="frcPrintBtn2" type="button">🖨 Save PDF</button>
+          </div>
+          <details style="margin-top:12px;">
+            <summary style="cursor:pointer;font-weight:600;">Optional: send in the background with Excel + PDF (needs one-time Apps Script setup)</summary>
+            <ol class="hint" style="margin:10px 0 8px 18px;line-height:1.7;">
+              <li>Open <b>script.google.com</b> &rarr; New project &rarr; delete the default code &rarr; paste the script below.</li>
+              <li>Change <code>SECRET</code> to your own long random text, then Save.</li>
+              <li><b>Deploy &rarr; New deployment &rarr; Web app</b> &mdash; Execute as: <b>Me</b>, Who has access: <b>Anyone</b>. Allow the Gmail permission.</li>
+              <li>Copy the URL ending in <code>/exec</code> into <b>Mailer URL</b> above, and the same secret into <b>Secret token</b>.</li>
+            </ol>
+                      <div class="frc-mail-grid" style="margin-top:10px;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;">
+            <div>
+              <label class="hint" for="frcEndpoint">Mailer URL (Apps Script Web App, ends with /exec)</label>
+              <input id="frcEndpoint" type="url" placeholder="https://script.google.com/macros/s/.../exec" autocomplete="off">
+            </div>
+            <div>
+              <label class="hint" for="frcToken">Secret token (same as in the script)</label>
+              <input id="frcToken" type="password" placeholder="secret token" autocomplete="off">
+            </div>
+          </div>
+            <div style="margin:10px 0;"><button class="btn" id="frcAutoSendBtn" type="button">✉ Send Email with Excel + PDF (Auto)</button></div>
+            <button class="btn small ghost" id="frcCopyScriptBtn" type="button">Copy script</button>
+            <textarea id="frcScriptCode" readonly spellcheck="false" style="width:100%;height:220px;margin-top:8px;font-family:ui-monospace,Consolas,monospace;font-size:12px;">/**
+ * NOC Dashboard mailer - Google Apps Script Web App
+ * Receives Excel + PDF (base64) from the dashboard and emails them as attachments.
+ * SETUP: script.google.com &gt; New project &gt; paste this &gt; change SECRET &gt; Save
+ * Deploy &gt; New deployment &gt; Web app &gt; Execute as: Me, Who has access: Anyone
+ * Allow Gmail permission, then copy the /exec URL into the dashboard.
+ */
+var SECRET = 'CHANGE-THIS-TO-A-LONG-RANDOM-TEXT';
+// Optional: only these recipients are allowed. Leave [] to allow any address.
+var ALLOWED_RECIPIENTS = [];
+
+function doPost(e) {
+  try {
+    var req = JSON.parse(e.postData.contents);
+    if (req.token !== SECRET) return out_({ ok: false, error: 'Invalid token' });
+    if (req.action !== 'sendReport') return out_({ ok: false, error: 'Unknown action' });
+
+    var to = String(req.recipient || '').trim();
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(to)) return out_({ ok: false, error: 'Invalid recipient' });
+    if (ALLOWED_RECIPIENTS.length &amp;&amp; ALLOWED_RECIPIENTS.indexOf(to) === -1)
+      return out_({ ok: false, error: 'Recipient not allowed' });
+
+    var files = (req.attachments || []).map(function (a) {
+      return Utilities.newBlob(Utilities.base64Decode(a.data), a.mimeType, a.filename);
+    });
+    if (!files.length) return out_({ ok: false, error: 'No attachments received' });
+
+    GmailApp.sendEmail(to, req.subject || 'NOC Monthly Report', req.message || '', {
+      attachments: files,
+      name: 'NOC Dashboard'
+    });
+    return out_({ ok: true });
+  } catch (err) {
+    return out_({ ok: false, error: String(err) });
+  }
+}
+
+function doGet() { return out_({ ok: true, info: 'NOC mailer is running' }); }
+
+function out_(obj) {
+  return ContentService.createTextOutput(JSON.stringify(obj)).setMimeType(ContentService.MimeType.JSON);
+}
+</textarea>
+          </details>
+          <div class="hint" style="margin-top:12px;"><b>Share Excel to Gmail (auto-attach)</b>: on your phone this opens the share sheet &mdash; choose <b>Gmail</b> and the Excel is already attached (type the recipient and press Send). Gmail links alone cannot attach files, so this share method is the no-setup way. On a PC browser that has no Gmail share option, it downloads the Excel and opens Gmail for you to attach.</div>
+        </div>
+        <div id="frcMessage" class="hint" style="margin-top:12px;" aria-live="polite"></div>
+      </div>
+
+      <div class="card report-chart-card">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;">
+          <div>
+            <h3 style="margin-bottom:4px;">Usage by Branch</h3>
+            <div class="hint">Circular view of total bandwidth usage across Chennai, Bangalore and Hosur.</div>
+          </div>
+          <span class="pill">Usage (GB)</span>
+        </div>
+        <div class="hint" style="margin-top:6px;">Shows which location consumed how much of the total.</div>
+        <div id="reportUsageChartWrap" style="height:340px;margin-top:12px;display:flex;align-items:center;justify-content:center;overflow:hidden;"><div id="reportCircleChart" style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;"></div></div>
+        <div id="reportAnalysis" style="margin-top:16px;"></div>
+      </div>
+
+      <div class="card">
+        <h3>Every host — total usage across all logged days</h3>
+        <div class="hint">Sorted heaviest to lightest. This is the complete history, not limited to one month or one day. <b>Days seen</b> = number of days that host had usage logged. <b>Avg. per day</b> = total usage &divide; days seen.</div>
+        <div class="table-scroll" style="max-height:70vh;">
+          <table>
+            <thead><tr><th>#</th><th>Location</th><th>Host</th><th>IP address</th><th>MAC address</th><th>Username</th><th>Total usage</th><th>Days seen</th><th>Avg. per day</th></tr></thead>
+            <tbody id="reportTableBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+<section class="view" id="view-ipdirectory">
+  <div class="ipdir-hero">
+    <div>
+      <h2 id="ipdirTitle">Chennai IP Directory</h2>
+      <p id="ipdirSubtitle">Only Chennai IPs, users, devices and usage history are shown on this page.</p>
+    </div>
+    <span class="pill" id="ipdirBranchPill">Chennai Branch</span>
+  </div>
+
+  <div class="ipdir-branch-switch" id="ipdirBranchSwitch">
+    <button type="button" class="ipdir-branch-btn" data-ipbranch="all">
+      <span class="branch-name">All Branches</span><span class="branch-count" id="ipdirCountAll">0 IPs</span>
+    </button>
+    <button type="button" class="ipdir-branch-btn" data-ipbranch="chennai">
+      <span class="branch-name">Chennai</span><span class="branch-count" id="ipdirCountChennai">0 IPs</span>
+    </button>
+    <button type="button" class="ipdir-branch-btn" data-ipbranch="bangalore">
+      <span class="branch-name">Bangalore</span><span class="branch-count" id="ipdirCountBangalore">0 IPs</span>
+    </button>
+    <button type="button" class="ipdir-branch-btn" data-ipbranch="hosur">
+      <span class="branch-name">Hosur</span><span class="branch-count" id="ipdirCountHosur">0 IPs</span>
+    </button>
+  </div>
+
+  <div class="ipdir-stats" id="ipdirStats"></div>
+
+  <div class="card">
+    <div class="ipdir-toolbar">
+      <input id="ipdirSearch" type="text" placeholder="Search this branch by IP or hostname…">
+      <button class="btn small" id="ipdirExcelBtn" type="button" title="Download the visible IP directory as Excel">⬇ Excel</button>
+      <button class="btn small ghost" id="ipdirPdfBtn" type="button" title="Download the visible IP directory as PDF">⬇ PDF</button>
+    </div>
+    <div class="ipdir-table-wrap">
+      <table class="ipdir-table">
+        <thead><tr><th>Location</th><th>IP Address</th><th>Hostname / Device</th><th style="width:120px">Status</th><th style="width:130px">History</th></tr></thead>
+        <tbody id="ipdirBody"></tbody>
+      </table>
+    </div>
+    <div class="muted" id="ipdirInfo" style="margin-top:12px"></div>
+    <div id="ipdirDetail"></div>
+  </div>
+</section>
+  </main>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<!-- ================= support ================= -->
+<button class="support-fab" id="supportFabBtn" type="button" aria-label="Contact support">
+  <span class="support-fab-ic">🎧</span> Support
+</button>
+
+<div class="support-modal-overlay" id="supportModalOverlay">
+  <div class="support-modal">
+    <div class="support-modal-header">
+      <span class="support-modal-ic">🎧</span>
+      <div class="support-modal-heading">
+        <h3>Report an Issue</h3>
+        <p>Sent straight to our support team.</p>
+      </div>
+      <button class="support-modal-close" id="supportModalCloseX" type="button" aria-label="Close">✕</button>
+    </div>
+    <div class="support-modal-body">
+      <div class="field-row" style="margin-bottom:14px;">
+        <div><label for="suppTitle">Title <span class="req">*</span></label><input type="text" id="suppTitle" placeholder="Enter Title"></div>
+      </div>
+      <div class="field-row" style="margin-bottom:14px;">
+        <div><label for="suppModule">Module <span class="req">*</span></label>
+          <select id="suppModule">
+            <option value="">Select Module</option>
+            <option>Dashboard</option>
+            <option>Add Today's Data</option>
+            <option>Search an IP</option>
+            <option>Device Directory</option>
+            <option>Admin</option>
+            <option>Monthly Report</option>
+            <option>Login / Account</option>
+            <option>Other</option>
+          </select>
+        </div>
+      </div>
+      <div class="field-row" style="margin-bottom:14px;">
+        <div><label for="suppUrl">URL</label><input type="text" id="suppUrl" placeholder="URL where issue occurred"></div>
+      </div>
+      <div class="field-row" style="margin-bottom:14px;">
+        <div><label for="suppDetails">Issue Details <span class="req">*</span></label><textarea id="suppDetails" placeholder="Describe your issue" rows="4" style="min-height:90px;"></textarea></div>
+      </div>
+      <div class="field-row" style="margin-bottom:6px;">
+        <div><label for="suppFile">Attachment (Optional)</label><input type="file" id="suppFile"></div>
+      </div>
+      <div class="support-hint">Attachments can't be auto-sent — if you pick a file, please attach it manually in the email that opens.</div>
+      <div class="login-error" id="suppError" style="margin-top:10px;"></div>
+    </div>
+    <div class="support-modal-footer">
+      <button class="btn" id="suppCreateBtn" type="button" style="flex:1; justify-content:center;">Create Ticket</button>
+      <button class="btn ghost" id="suppCloseBtn" type="button" style="flex:1; justify-content:center;">Close</button>
+    </div>
+  </div>
+</div>
+
+<script src="js/app.js"></script>
+
+<script src="js/firewall.js"></script>
+
+<button class="usage-chat-btn" id="usageChatBtn" type="button" title="Network Usage Assistant" aria-label="Open Network Usage Assistant">
+<svg class="noc-bot" viewBox="0 0 120 140" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false">
+  <defs>
+    <linearGradient id="nbW" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffffff"/><stop offset="1" stop-color="#d9e2ef"/></linearGradient>
+    <linearGradient id="nbB" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#3f74d8"/><stop offset="1" stop-color="#1a3a8c"/></linearGradient>
+    <radialGradient id="nbE" cx=".35" cy=".3" r=".85"><stop offset="0" stop-color="#2a56b8"/><stop offset="1" stop-color="#08143a"/></radialGradient>
+    <radialGradient id="nbR" cx=".35" cy=".3" r=".8"><stop offset="0" stop-color="#ff7b7b"/><stop offset="1" stop-color="#d9262c"/></radialGradient>
+  </defs>
+  <ellipse class="nb-shadow" cx="60" cy="135" rx="24" ry="3.6" fill="#000" opacity=".35"/>
+  <g class="nb-float">
+    <!-- antennas -->
+    <path d="M31 32 L24 12" stroke="#cfd9e8" stroke-width="3.2" stroke-linecap="round" fill="none"/>
+    <path d="M89 32 L96 12" stroke="#cfd9e8" stroke-width="3.2" stroke-linecap="round" fill="none"/>
+    <circle class="nb-ant" style="transform-origin:24px 9px" cx="24" cy="9" r="5" fill="url(#nbR)"/>
+    <circle class="nb-ant nb-ant2" style="transform-origin:96px 9px" cx="96" cy="9" r="5" fill="url(#nbR)"/>
+    <circle cx="22.6" cy="7.4" r="1.4" fill="#fff" opacity=".8"/><circle cx="94.6" cy="7.4" r="1.4" fill="#fff" opacity=".8"/>
+    <!-- body -->
+    <path d="M31 94 C31 78 89 78 89 94 C89 118 76 129 60 129 C44 129 31 118 31 94 Z" fill="url(#nbW)" stroke="#c3cfe0" stroke-width="1"/>
+    <path d="M41 97 Q60 121 79 97" stroke="#e8383d" stroke-width="1.8" fill="none" stroke-linecap="round"/>
+    <path d="M60 96 L69 108 Q60 111.5 51 108 Z" fill="url(#nbR)"/>
+    <!-- left arm -->
+    <g class="nb-armL" style="transform-origin:34px 90px"><ellipse cx="27" cy="101" rx="8" ry="13" transform="rotate(18 27 101)" fill="url(#nbW)" stroke="#c3cfe0" stroke-width="1"/><rect x="31" y="88" width="5" height="9" rx="2.5" fill="#e8383d" transform="rotate(18 33 92)"/></g>
+    <!-- right arm (waves) -->
+    <g class="nb-armR" style="transform-origin:86px 90px"><ellipse cx="93" cy="101" rx="8" ry="13" transform="rotate(-18 93 101)" fill="url(#nbW)" stroke="#c3cfe0" stroke-width="1"/><rect x="84" y="88" width="5" height="9" rx="2.5" fill="#e8383d" transform="rotate(-18 87 92)"/></g>
+    <!-- head group -->
+    <g class="nb-head" style="transform-origin:60px 78px">
+      <!-- ear cups -->
+      <rect x="12" y="35" width="17" height="30" rx="8.5" fill="url(#nbW)" stroke="#c3cfe0" stroke-width="1"/><rect x="16" y="41" width="3.4" height="17" rx="1.7" fill="#e8383d"/>
+      <rect x="91" y="35" width="17" height="30" rx="8.5" fill="url(#nbW)" stroke="#c3cfe0" stroke-width="1"/><rect x="100.6" y="41" width="3.4" height="17" rx="1.7" fill="#e8383d"/>
+      <!-- head -->
+      <ellipse cx="60" cy="49" rx="35" ry="32" fill="url(#nbW)" stroke="#c3cfe0" stroke-width="1"/>
+      <!-- helmet cap -->
+      <path d="M26 44 C22 12 98 12 94 44 C84 33 36 33 26 44 Z" fill="url(#nbB)"/>
+      <path d="M42 29 Q60 20 78 29" stroke="#e8383d" stroke-width="2" fill="none" stroke-linecap="round"/>
+      <path d="M50 22.5 H70 L67.5 29.5 H52.5 Z" fill="#8fbaff" opacity=".85"/>
+      <g class="nb-face">
+      <!-- visor -->
+      <rect x="28" y="40" width="64" height="28" rx="14" fill="url(#nbB)" stroke="#ffffff" stroke-opacity=".5" stroke-width="1"/>
+      <!-- eyes -->
+      <g class="nb-eye" style="transform-origin:46px 54px"><circle cx="46" cy="54" r="9.5" fill="url(#nbE)" stroke="#69bbff" stroke-width="1.8"/><circle cx="49.2" cy="50.6" r="3" fill="#fff"/><circle cx="43" cy="58" r="1.5" fill="#9fd4ff"/></g>
+      <g class="nb-eye" style="transform-origin:74px 54px"><circle cx="74" cy="54" r="9.5" fill="url(#nbE)" stroke="#69bbff" stroke-width="1.8"/><circle cx="77.2" cy="50.6" r="3" fill="#fff"/><circle cx="71" cy="58" r="1.5" fill="#9fd4ff"/></g>
+      <!-- smile -->
+      <path d="M53 73.5 Q60 78 67 73.5" stroke="#98a8c0" stroke-width="2" fill="none" stroke-linecap="round"/>
+      </g>
+    </g>
+  </g>
+</svg>
+</button>
+<div id="nocBotBubble" role="button" tabindex="-1" aria-hidden="true"><span class="nbb nbb-a">Hi, I'm NOC Bot</span><span class="nbb nbb-b">I'm here to help you with usage, hosts, users &amp; firewall data</span></div>
+<script src="js/noc-bot-login-gate.js"></script>
+<div class="usage-chat" id="usageChat" aria-hidden="true">
+ <div class="usage-chat-head"><div><b>Network Assistant · All Branches</b><small>Chennai · Bangalore · Hosur — IP, host, user, usage & firewall data</small></div><button class="usage-chat-x" id="usageChatX">×</button></div>
+ <div class="usage-chat-body" id="usageChatBody"></div>
+ <div class="usage-chat-tools" id="usageChatTools">
+   <button type="button" id="usageChatModeOffline" class="uc-mode active">Offline Bot</button>
+   <button type="button" id="usageChatModeOnline" class="uc-mode">Online AI Bot</button>
+   <button type="button" id="usageChatSetup">AI Setup</button>
+   <button type="button" id="usageChatClear">Clear Chat</button>
+   <button type="button" id="usageChatHistory">History</button>
+ </div>
+ <div class="usage-chat-history-panel" id="usageChatHistoryPanel" aria-hidden="true">
+   <div class="usage-chat-history-head"><b>Chat History</b><button type="button" id="usageChatHistoryClose">×</button></div>
+   <div class="usage-chat-history-list" id="usageChatHistoryList"></div>
+ </div>
+ <div class="usage-quick"><button data-q="Show all branches usage">All branches</button><button data-q="Show top users in all branches">Top users</button><button data-q="Day wise usage report">Day wise</button><button data-q="Week wise usage report">Week wise</button><button data-q="Monthly usage report">Monthly</button><button data-q="Show IP wise usage in all branches">IP wise</button><button data-q="Show application usage in all branches">Applications</button></div>
+ <div class="usage-chat-form"><input id="usageChatInput" placeholder="Ask: How much did Ravi use? / 192.168.1.10 / Chennai monthly report"><button id="usageChatSend">Send</button></div>
+ <div class="usage-chat-note">Ask in plain English. I search saved IP, host, user, usage, application and firewall data across all three branches, and I can build day, week or month reports with an Excel download.</div>
+</div>
+
+<script src="js/chatbot.js"></script>
+
+<script src="js/chatbot-enhancements.js"></script>
+
+<!-- RESPONSIVE LAYOUT OVERRIDE: desktop, laptop, tablet and mobile -->
+
+<script src="js/branch-analytics.js"></script>
+<script src="js/chart-performance.js"></script>
+
+<script src="js/network-flow.js"></script>
+
+<script src="js/mobile-nav.js"></script>
+
+<script src="js/report-center.js"></script>
+
+<script src="js/network-diagram.js"></script>
+
+<!-- ===== NOC Network Diagram: reference-image look (patch) ===== -->
+
+<script src="js/network-diagram-look.js"></script>
+
+<script src="js/branch-gate.js"></script>
+
+<script src="js/cable-flow.js"></script>
+
+<!-- ===== Final Chennai Network Diagram cleanup ===== -->
+
+<script src="js/network-cleanup.js"></script>
+
+<script src="js/network-animation.js"></script>
+
+<script src="js/internet-bg.js"></script>
+</body>
+</html>
+
